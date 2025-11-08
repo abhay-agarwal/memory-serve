@@ -140,6 +140,10 @@ impl<B: IntoResponse> AssetResponse<'_, B> {
 impl Asset {
     /// Pick the cache policy for the asset based on its MIME type.
     fn cache_control(&self, options: &ServeOptions) -> (HeaderName, HeaderValue) {
+        if let Some(policy) = options.policy_for(self.route) {
+            return policy.as_header();
+        }
+
         match self.content_type {
             "text/html" => options.html_cache_control.as_header(),
             _ => options.cache_control.as_header(),
