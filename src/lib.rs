@@ -120,6 +120,19 @@ impl MemoryServe {
         self
     }
 
+    /// Apply a cache policy to assets whose path matches the provided predicate.
+    ///
+    /// Policies are evaluated in the order they were added. The first matching
+    /// policy wins.
+    pub fn policy<F>(mut self, matcher: F, cache_control: CacheControl) -> Self
+    where
+        F: Fn(&str) -> bool + Send + Sync + 'static,
+    {
+        self.options.add_policy(matcher, cache_control);
+
+        self
+    }
+
     /// Create an alias for a route / file
     pub fn add_alias(mut self, from: &'static str, to: &'static str) -> Self {
         self.aliases.push((from, to));
@@ -392,6 +405,20 @@ mod tests {
 
         assert_eq!(code, 200);
         assert_eq!(length.parse::<i32>().unwrap(), 437);
+    }
+
+    #[tokio::test]
+    async fn policy_overrides_cache_control() {
+        let memory_router = test_load!()
+            .cache_control(CacheControl::Long)
+            .policy(|name| name.ends_with(".js"), CacheControl::NoCache)
+            .into_router();
+
+        let (code, headers) = get(memory_router, "/assets/index.js", "accept", "*/*").await;
+        let cache_control = get_header(&headers, &CACHE_CONTROL);
+
+        assert_eq!(code, 200);
+        assert_eq!(cache_control, "no-cache");
     }
 
     #[tokio::test]
